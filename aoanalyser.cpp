@@ -15,12 +15,17 @@
 #include <errno.h>
 #include <pulse/simple.h>
 #include <pulse/error.h>
-#define BUFSIZE 1024
+//#define BUFSIZE 512
+//#define BUFSIZE 1024
+//#define BUFSIZE 2048
+#define BUFSIZE 4096
 //GLUT - window
 #include<GL/glut.h>
 #include <GLFW/glfw3.h>
 //matplotlib
 #include "matplotlibcpp.h"
+//time measure
+#include <chrono>
 
 //g++ aoanalyser.cpp -I/usr/include/python2.7 -I/home/daviddjh/.local/lib/python2.7/site-packages/numpy/core/include/ -lfftw3 -lm -lpulse-simple -lpulse -g -std=c++11 -lpython2.7 
 // g++ aoanalyser.cpp -I/usr/include/python2.7 -I/home/daviddjh/.local/lib/python2.7/site-packages/numpy/core/include/ -lfftw3 -lfftw3f -lm -lpulse-simple -lpulse -g -std=c++11 -lpython2.7
@@ -35,8 +40,9 @@ void setupGlut(int* argc, char** argv);
 
 void Grender(void);
 
-
 int main (int argc, char *argv[]){
+
+    auto timestart = chrono::high_resolution_clock::now();
 
     //setupGlut(&argc, argv);
     GLFWwindow* window;
@@ -60,6 +66,9 @@ int main (int argc, char *argv[]){
     b = 0.6;
     g = 0.01;
 
+    //fftw_init_threads();
+    //fftwf_plan_with_nthreads(4);
+
 
 
     fftwf_complex *out;
@@ -68,15 +77,19 @@ int main (int argc, char *argv[]){
     fftwf_plan p;
     int ret;
     float buf[BUFSIZE];
+    //float *buf;
 
     //fftw arrays
-    //in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * BUFSIZE);
-    in = (float*) fftwf_malloc(sizeof(double) * BUFSIZE);
+    //buf = (float*) fftw_malloc(sizeof(float) * BUFSIZE);
+    //in = (float*) fftwf_malloc(sizeof(float) * BUFSIZE);
+    in = (float*) fftwf_malloc(sizeof(float) * BUFSIZE);
     out = (fftwf_complex*) fftwf_malloc(sizeof(fftwf_complex) * BUFSIZE);
 
     //fftw plan - setup for the transform to be executed
     //p = fftw_plan_dft_1d(BUFSIZE, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-    p = fftwf_plan_dft_r2c_1d(BUFSIZE, in, out, FFTW_ESTIMATE);
+    p = fftwf_plan_dft_r2c_1d(BUFSIZE, buf, out, FFTW_ESTIMATE);
+    cout << fftwf_cost(p) << endl;
+
 
     /* The sample type to use */
     static const pa_sample_spec ss = {
@@ -109,21 +122,41 @@ int main (int argc, char *argv[]){
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
+            auto time_start_loop = chrono::high_resolution_clock::now();
+
        // for (int j = 0; j < 1000; j++){
+            auto time_start_buf = chrono::high_resolution_clock::now();
+            cout << "sizeof(buff): " << sizeof(buf) << " BUFSIZE: " << BUFSIZE << 
+              " buffsize * floatsize: " << sizeof(float) * BUFSIZE << endl;
+
             pa_simple_read(s, buf, sizeof(buf), &error);
+            if (error)
+              cout << error << endl;
+            auto time_end_buf = chrono::high_resolution_clock::now();
+
+            //pa_simple_read(s, in, sizeof(in), &error);
 
             //fill fftw array with audio buffer
+            
+            /*
             for(int i = 0; i < BUFSIZE; i++){
-                double multiplier = 0.5 * (1 - cos(2*3.1415*i/(BUFSIZE-1)));
-                in[i] = (multiplier * buf[i]);
+                //double multiplier = 0.5 * (1 - cos(2*3.1415*i/(BUFSIZE-1)));
+                //in[i] = (multiplier * buf[i]);
+                in[i] = buf[i];
             }
+            */
+            
             //in = buf;
+            auto time_start_plan = chrono::high_resolution_clock::now();
 
             fftwf_execute(p);
+
+            auto time_end_plan = chrono::high_resolution_clock::now();
 
             // Bass - 20 - 300      [1,7]   .1 = 35
             // Mid  - 301 - 1280    [8,29]  .1 = 105
             // High - 1281 - 10200  [30,233].1 = 1015
+            /*
             bass = 0;
             mid = 0;
             high = 0;
@@ -166,6 +199,9 @@ int main (int argc, char *argv[]){
         b=4*pow((b-(midval)),3)+(midval);
         g=4*pow((g-(midval)),3)+(midval);
         r=4*pow((r-(midval)),3)+(midval);
+        */
+
+        auto time_start_render = chrono::high_resolution_clock::now();
 
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
@@ -174,10 +210,12 @@ int main (int argc, char *argv[]){
         //glColor3f(0, 0, b);
         float size;
         //glRectf(-1.0f, -1.0f, 1.0, 1.0);  //start pos 
-        glColor3f(0.5, 0, b);
+        //glColor3f(r, 0.1, b);
+        glColor3f(0, 0, 0.5);
         for(int k = 1; k < 200; k++){
             size = sqrt((out[k][0] * out[k][0]) + (out[k][1] * out[k][1]));
-            glRectf(((float)2*k/200)-1, -1.0f, (((float)2*k/200)-1+(0.005f)), (size/40)-1);  //start pos 
+            //glRectf(((float)2*k/200)-1, -1.0f, (((float)2*k/200)-1+(0.005f)), (size/70)-1);  //start pos 
+            glRectf(((float)2*k/200)-1, -1.0f, (((float)2*k/200)-1+(0.005f)), (pow(size/200, 2))-1);  //start pos 
             /*
             glRectf((2*k/233)-1, -1.0f,  //start pos 
                     (2*k/233)-1, size);   //end pos
@@ -197,6 +235,21 @@ int main (int argc, char *argv[]){
 
         /* Poll for and process events */
         glfwPollEvents();
+        auto time_end_render = chrono::high_resolution_clock::now();
+
+        auto time_end_loop = chrono::high_resolution_clock::now();
+
+        //Calc and print durations for debugging
+        auto duration_loop = chrono::duration_cast<std::chrono::microseconds>( time_end_loop - time_start_loop ).count();
+        auto duration_plan = chrono::duration_cast<std::chrono::microseconds>( time_end_plan - time_start_plan ).count();
+        auto duration_render = chrono::duration_cast<std::chrono::microseconds>( time_end_render - time_start_render ).count();
+        auto duration_buf= chrono::duration_cast<std::chrono::microseconds>( time_end_buf - time_start_buf ).count();
+
+        cout << "Duration of loop: " << duration_loop <<  
+          "    Duration of plan: " << duration_plan <<  
+          "    Duration of render: " << duration_render <<  
+          "    Duration of buff copy: " << duration_buf << endl;
+        
     }
 
     glfwTerminate();
@@ -224,9 +277,8 @@ int main (int argc, char *argv[]){
     */
 
     ret = 0;
-
+    //free(buf);
     fftwf_destroy_plan(p);
-    fftwf_free(in);
     fftwf_free(out);
 
 
