@@ -56,19 +56,18 @@ int main(int argc, char* argv[]) {
 
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
-    r = .11;
-    b = 0.6;
-    g = 0.01;
 
-    fftwf_complex* out;
-    float* in;
-    fftwf_plan p;
+
+    //return var for main func
     int ret;
 
-    out = (fftwf_complex*) fftwf_malloc(sizeof(fftwf_complex) * BUFFSIZE);
-
+    // init Audio Sink
     MyAudioSink* pMySink = new MyAudioSink;
     pMySink->DoneRecording = false;
+
+    // init fftw plan and output array
+    fftwf_complex* out = (fftwf_complex*) fftwf_malloc(sizeof(fftwf_complex) * BUFFSIZE);
+    fftwf_plan p = fftwf_plan_dft_r2c_1d(400, pMySink->SoundBuffer, out, 0);
 
     //hann function
     /*
@@ -77,13 +76,11 @@ int main(int argc, char* argv[]) {
         buff.push_back(multiplier * buff[i]);
     }
     */
-    p = fftwf_plan_dft_r2c_1d(400, pMySink->SoundBuffer, out, 0);
 
-    float bass, mid, high, midval;
-
-    //Start Recording
+    //Start Recording Thread ( Records audio off main loop
     std::thread SoundThread(StartRecord, pMySink);
 
+    // Start render Loop
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
@@ -105,7 +102,7 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         float size;
         glColor3f(0, 0, 1);
-        for(int k = 1; k < 400; k++){
+        for(int k = 1; k < 200; k++){
             /* Get the amplitude of the freq */
             size = sqrt((out[k][0] * out[k][0]) + (out[k][1] * out[k][1]));
             /* Make a rectangle according to the above size */

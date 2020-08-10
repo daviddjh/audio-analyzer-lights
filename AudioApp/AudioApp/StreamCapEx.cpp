@@ -56,8 +56,6 @@ HRESULT RecordAudioStream(MyAudioSink* pMySink)
     BYTE* pData;
     DWORD flags;
 
-    std::cout << "Got here 2" << std::endl;
-
     hr = CoCreateInstance(
         CLSID_MMDeviceEnumerator, NULL,
         CLSCTX_ALL, IID_IMMDeviceEnumerator,
