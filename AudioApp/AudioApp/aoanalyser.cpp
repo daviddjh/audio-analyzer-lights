@@ -1,3 +1,6 @@
+#define EXTERN
+//define EXTERN only goes in one file, vars.h goes in all files that use it
+
 //STD
 #include <iostream>
 #include <thread>
@@ -24,39 +27,41 @@
 #include "audioclient.h"
 #include "mmdeviceapi.h"
 
-//#define BUFSIZE 512
-//#define BUFSIZE 1024
-//#define BUFSIZE 2048
-//#define BUFSIZE 4096
-#define BUFFSIZE 400
+//Global Vars
+//std::mutex mtx;
+#include "vars.h"
 
-//haha ita me!
+GLFWwindow * init_openGL(){
 
-std::mutex mtx;                   // mutex for sound and copying buffer
-
-int main(int argc, char* argv[]) {
-
-    auto timestart = std::chrono::high_resolution_clock::now();
-
-    // Setup GLFW
     GLFWwindow* window;
-    float r, g, b = 0;
 
     /* Initialize the library */
     if (!glfwInit())
-        return -1;
+        return nullptr;
 
     /* Create a windowed mode window and its OpenGL context */
-    window = glfwCreateWindow(1920, 1080, "Hello World", NULL, NULL);
+    window = glfwCreateWindow(1920, 1080, "Audio Out Analysis", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
-        return -1;
+        return nullptr;
     }
+}
 
+void init(){
+
+}
+
+int main(int argc, char* argv[]) {
+
+	auto time_start_main = std::chrono::high_resolution_clock::now();
+
+    //fftwf_init_threads();
+
+    // Setup GLFW
+    GLFWwindow* window = init_openGL();
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
-
 
     //return var for main func
     int ret;
@@ -67,7 +72,11 @@ int main(int argc, char* argv[]) {
 
     // init fftw plan and output array
     fftwf_complex* out = (fftwf_complex*) fftwf_malloc(sizeof(fftwf_complex) * BUFFSIZE);
-    fftwf_plan p = fftwf_plan_dft_r2c_1d(400, pMySink->SoundBuffer, out, 0);
+    //fftwf_plan_with_nthreads(4);
+    fftwf_plan p = fftwf_plan_dft_r2c_1d(BUFFSIZE, pMySink->pCurrentSoundBuffer, out, 0);
+
+    //Start Recording Thread ( Records audio off main loop
+    std::thread SoundThread(StartRecord, pMySink);
 
     //hann function
     /*
@@ -77,36 +86,48 @@ int main(int argc, char* argv[]) {
     }
     */
 
-    //Start Recording Thread ( Records audio off main loop
-    std::thread SoundThread(StartRecord, pMySink);
-
     // Start render Loop
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
-            auto time_start_loop = std::chrono::high_resolution_clock::now();
-            
-            auto time_start_plan = std::chrono::high_resolution_clock::now();
+		auto time_start_loop = std::chrono::high_resolution_clock::now();
+		
+		auto time_start_plan = std::chrono::high_resolution_clock::now();
 
-            mtx.lock();
+		mtx.lock();
+        // hann window
+		for (int i = 0; i < BUFFSIZE; i++) {
+			float multiplier = 0.5 * (1 - cos(2*3.1415*i/(BUFFSIZE - 1)));
+			pMySink->pCurrentSoundBuffer[i] = pMySink->pCurrentSoundBuffer[i] * multiplier;
+		}
 
-			fftwf_execute(p);
+		fftwf_execute(p);
 
-            mtx.unlock();
+		mtx.unlock();
 
-            auto time_end_plan = std::chrono::high_resolution_clock::now();
+		auto time_end_plan = std::chrono::high_resolution_clock::now();
 
         auto time_start_render = std::chrono::high_resolution_clock::now();
 
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
         float size;
-        glColor3f(0, 0, 1);
-        for(int k = 1; k < 200; k++){
+        /*
+        auto time_color = std::chrono::high_resolution_clock::now();
+		auto duration_color = std::chrono::duration_cast<std::chrono::seconds>( time_color - time_start_main).count();
+        float mod1 = ((float)((float)(duration_color % 20) + 1) / 20);
+        float mod2 = ((float)((float)((duration_color + 7) % 20) + 1) / 20);
+        float mod3 = ((float)((float)((duration_color + 15) % 20) + 1) / 20);
+        std::cout << mod1 << std::endl;
+        glColor3f(mod1, mod2, mod3);
+        */
+        glColor3f(0, .2, 1);
+        for(int k = 1; k < 400; k++){
             /* Get the amplitude of the freq */
             size = sqrt((out[k][0] * out[k][0]) + (out[k][1] * out[k][1]));
+
             /* Make a rectangle according to the above size */
-            glRectf(((float)2*k/200)-1, -1.0f, (((float)2*k/200)-1+(0.005f)), (size/50) - 1);  //start pos 
+            glRectf(((float)2*k/400)-1, -1.0f, (((float)2*k/400)-1+(0.005f)), (size/90) - 1);  //start pos 
         }
 
         /* Swap front and back buffers */
@@ -118,10 +139,10 @@ int main(int argc, char* argv[]) {
 
         auto time_end_loop = std::chrono::high_resolution_clock::now();
 
-        //Calc and print durations for debugging
-        auto duration_loop = std::chrono::duration_cast<std::chrono::microseconds>( time_end_loop - time_start_loop ).count();
-        auto duration_plan = std::chrono::duration_cast<std::chrono::microseconds>( time_end_plan - time_start_plan ).count();
-        auto duration_render = std::chrono::duration_cast<std::chrono::microseconds>( time_end_render - time_start_render ).count();
+		//Calc and print durations for debugging
+		auto duration_loop = std::chrono::duration_cast<std::chrono::microseconds>( time_end_loop - time_start_loop ).count();
+		auto duration_plan = std::chrono::duration_cast<std::chrono::microseconds>( time_end_plan - time_start_plan ).count();
+		auto duration_render = std::chrono::duration_cast<std::chrono::microseconds>( time_end_render - time_start_render ).count();
     }
 
     glfwTerminate();
@@ -130,7 +151,6 @@ int main(int argc, char* argv[]) {
     ret = 0;
     fftwf_destroy_plan(p);
     fftwf_free(out);
-    delete pMySink;
 
     return ret;
     

@@ -14,7 +14,8 @@
 //MyAudioSink
 #include "MyAudioSink.h"
 
-extern std::mutex mtx;
+//Global Vars
+#include "vars.h"
 
 HRESULT MyAudioSink::CopyData(BYTE * pdata, UINT32 numFramesAvaliable, BOOL * bDone) {
 
@@ -29,12 +30,16 @@ HRESULT MyAudioSink::CopyData(BYTE * pdata, UINT32 numFramesAvaliable, BOOL * bD
 		for (long long int i = 0; i < numFramesAvaliable; i++) {
 
 			// mutex lock for thread sync
-
-			mtx.lock();
-
-			memcpy(this->SoundBuffer + i, pdata + (i * 8), sizeof(float));
-
-			mtx.unlock();
+			this->NextBufferSize++;
+			if (NextBufferSize > BUFFSIZE) {
+				mtx.lock();
+				float* ptemp = this->pNextSoundBuffer;
+				this->pNextSoundBuffer = this->pCurrentSoundBuffer;
+				this->pCurrentSoundBuffer = ptemp;
+				this->NextBufferSize = 1;
+				mtx.unlock();
+			}
+			memcpy(this->pNextSoundBuffer + this->NextBufferSize - 1, pdata + (i * 8), sizeof(float));
 		}
 	}
 	else {

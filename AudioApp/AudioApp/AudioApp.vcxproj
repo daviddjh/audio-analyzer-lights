@@ -152,6 +152,7 @@
   <ItemGroup>
     <ClInclude Include="MyAudioSink.h" />
     <ClInclude Include="StreamCapEx.h" />
+    <ClInclude Include="vars.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

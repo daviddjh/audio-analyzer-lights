@@ -1,13 +1,20 @@
 #pragma once
 #ifndef MYAUDIOSINK
 #define MYAUDIOSINK
-#include <deque>
+
+//Global Vars
+#include "vars.h"
 
 class MyAudioSink {
 
 public:
 	bool DoneRecording = false;
-	float SoundBuffer[500];
+	int NextBufferSize = 0;
+
+	float SoundBufferA[BUFFSIZE];
+	float SoundBufferB[BUFFSIZE];
+	float * pCurrentSoundBuffer = SoundBufferA;
+	float * pNextSoundBuffer = SoundBufferB;
 
 	WAVEFORMATEX myWaveFormat;
 
