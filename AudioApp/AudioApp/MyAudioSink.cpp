@@ -30,16 +30,16 @@ HRESULT MyAudioSink::CopyData(BYTE * pdata, UINT32 numFramesAvaliable, BOOL * bD
 		for (long long int i = 0; i < numFramesAvaliable; i++) {
 
 			// mutex lock for thread sync
+			mtx.lock();
 			this->NextBufferSize++;
 			if (NextBufferSize > BUFFSIZE) {
-				mtx.lock();
 				float* ptemp = this->pNextSoundBuffer;
 				this->pNextSoundBuffer = this->pCurrentSoundBuffer;
 				this->pCurrentSoundBuffer = ptemp;
 				this->NextBufferSize = 1;
-				mtx.unlock();
 			}
 			memcpy(this->pNextSoundBuffer + this->NextBufferSize - 1, pdata + (i * 8), sizeof(float));
+			mtx.unlock();
 		}
 	}
 	else {

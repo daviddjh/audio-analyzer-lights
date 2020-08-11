@@ -70,10 +70,13 @@ int main(int argc, char* argv[]) {
     MyAudioSink* pMySink = new MyAudioSink;
     pMySink->DoneRecording = false;
 
+    // analysis buffer for this thread
+    float aBuffer[BUFFSIZE];
+
     // init fftw plan and output array
     fftwf_complex* out = (fftwf_complex*) fftwf_malloc(sizeof(fftwf_complex) * BUFFSIZE);
     //fftwf_plan_with_nthreads(4);
-    fftwf_plan p = fftwf_plan_dft_r2c_1d(BUFFSIZE, pMySink->pCurrentSoundBuffer, out, 0);
+    fftwf_plan p = fftwf_plan_dft_r2c_1d(BUFFSIZE, aBuffer, out, 0);
 
     //Start Recording Thread ( Records audio off main loop
     std::thread SoundThread(StartRecord, pMySink);
@@ -91,19 +94,27 @@ int main(int argc, char* argv[]) {
     while (!glfwWindowShouldClose(window))
     {
 		auto time_start_loop = std::chrono::high_resolution_clock::now();
-		
+
+		auto time_start_bufcpy = std::chrono::high_resolution_clock::now();
+
+        mtx.lock();
+
+        memcpy(aBuffer, pMySink->pCurrentSoundBuffer, BUFFSIZE * sizeof(float));
+
+        mtx.unlock();
+
+		auto time_end_bufcpy = std::chrono::high_resolution_clock::now();
+
 		auto time_start_plan = std::chrono::high_resolution_clock::now();
 
-		mtx.lock();
         // hann window
 		for (int i = 0; i < BUFFSIZE; i++) {
 			float multiplier = 0.5 * (1 - cos(2*3.1415*i/(BUFFSIZE - 1)));
-			pMySink->pCurrentSoundBuffer[i] = pMySink->pCurrentSoundBuffer[i] * multiplier;
+			//pMySink->pCurrentSoundBuffer[i] = pMySink->pCurrentSoundBuffer[i] * multiplier;
+			aBuffer[i] = aBuffer[i] * multiplier;
 		}
 
 		fftwf_execute(p);
-
-		mtx.unlock();
 
 		auto time_end_plan = std::chrono::high_resolution_clock::now();
 
@@ -121,13 +132,22 @@ int main(int argc, char* argv[]) {
         std::cout << mod1 << std::endl;
         glColor3f(mod1, mod2, mod3);
         */
-        glColor3f(0, .2, 1);
-        for(int k = 1; k < 400; k++){
+        //BASS color changer
+        float bass = 0;
+        for (int k = 0; k < 10; k++) {
+            bass += sqrt((out[k][0] * out[k][0]) + (out[k][1] * out[k][1]));
+        }
+        bass = (bass / 10) / 110;
+        glColor3f(0 + bass, .2, 1);
+        for(int k = 1; k < 300; k++){
             /* Get the amplitude of the freq */
             size = sqrt((out[k][0] * out[k][0]) + (out[k][1] * out[k][1]));
 
             /* Make a rectangle according to the above size */
-            glRectf(((float)2*k/400)-1, -1.0f, (((float)2*k/400)-1+(0.005f)), (size/90) - 1);  //start pos 
+            glRectf(((float)2*k/300)-1, -1.0f, (((float)2*k/300)-1+(0.005f)), (size/90) - 1);  //start pos 
+
+            //decimal scale
+            //glRectf(((float)2*k/400)-1, -1.0f, (((float)2*k/400)-1+(0.005f)), (log10(size)/2) - 1);  //start pos 
         }
 
         /* Swap front and back buffers */
@@ -143,6 +163,14 @@ int main(int argc, char* argv[]) {
 		auto duration_loop = std::chrono::duration_cast<std::chrono::microseconds>( time_end_loop - time_start_loop ).count();
 		auto duration_plan = std::chrono::duration_cast<std::chrono::microseconds>( time_end_plan - time_start_plan ).count();
 		auto duration_render = std::chrono::duration_cast<std::chrono::microseconds>( time_end_render - time_start_render ).count();
+		auto duration_bufcpy = std::chrono::duration_cast<std::chrono::microseconds>( time_end_bufcpy - time_start_bufcpy ).count();
+
+        /*
+        std::cout << "Durration loop: " << duration_loop << " ";
+        std::cout << "Durration bufcpy: " << duration_bufcpy << " ";
+        std::cout << "Durration plan: " << duration_plan << " ";
+        std::cout << "Durration render: " << duration_render << std::endl;
+        */
     }
 
     glfwTerminate();
